@@ -87,17 +87,50 @@ Next steps:
 
 ### 完整流程
 
+以 `data/01-wallets.csv` 为例，按顺序执行（步骤 2–7 的 `--csv` 需与步骤 1 生成的批次一致）：
+
 ```bash
-# 假设生成 data/01-wallets.csv
+# 1. 创建 5 个钱包 → data/01-wallets.csv / data/01-wallets-private.csv
 npm run 01:create-wallets -- --count 5
-# 转pga作为gas fee，默认0.01 可以在.env文件中配置
+
+# 2. 主钱包向各地址转 PGA 作 gas（默认 0.01，.env 中 PGA_FEE_AMOUNT 可改）
 npm run 02:transfer-pga -- --csv data/01-wallets.csv
+
+# 3. 主钱包向各地址分 BTCD（先查余额再分配，全部分完）
 npm run 03:transfer-btcd -- --csv data/01-wallets.csv --min-btcd 1 --max-btcd 100
+
+# 4. 各钱包将 BTCD 兑换为 USDT（需 private CSV）
 npm run 04:swap-btcd -- --csv data/01-wallets-private.csv
+
+# 5. 各钱包将 PGP USDT 跨链到 BSC（发完即继续，不等 BSC 到账）
 npm run 05:bridge-usdt -- --csv data/01-wallets-private.csv
-# 转bnb作为gas fee，默认0.0001 可以在.env文件中配置
+
+# 6. 主钱包向各 BSC 地址转 BNB 作 gas（默认 0.0002，.env 中 BNB_FEE_AMOUNT 可改）
 npm run 06:transfer-bnb -- --csv data/01-wallets.csv
+
+# 7. 将 BSC 上的 USDT 归集到主钱包（只收 USDT，BNB 留在子钱包）
 npm run 07:collect-usdt -- --csv data/01-wallets-private.csv
+```
+
+**钱包间交易间隔**：步骤 2–7 默认每处理完一个钱包后随机等待 **1～3 秒**（`--delay-min` / `--delay-max`）。可调长，例如 bridge 间隔 5～10 秒：
+
+```bash
+npm run 05:bridge-usdt -- --csv data/01-wallets-private.csv --delay-min 5 --delay-max 10
+```
+
+设为 `--delay-min 0 --delay-max 0` 则不等待。
+
+**可选参数示例**：
+
+```bash
+# 步骤 5：轮询 BSC 到账（默认不开启）
+npm run 05:bridge-usdt -- --csv data/01-wallets-private.csv --check-bridge
+
+# 步骤 4：只检查余额，不实际 swap
+npm run 04:swap-btcd -- --csv data/01-wallets-private.csv --no-swap
+
+# 任意步骤：模拟运行
+npm run 03:transfer-btcd -- --csv data/01-wallets.csv --min-btcd 1 --max-btcd 5 --dry-run
 ```
 
 ### 命令一览
@@ -123,7 +156,9 @@ npm run 07:collect-usdt -- --csv data/01-wallets-private.csv
 
 `amount=0` 的地址会跳过，不发送交易。
 
-步骤 5 跨链成功后 `--check-bridge` 会轮询 BSC USDT 到账（默认 600s）。BSC RPC 不稳定时可设置 `.env` 中的 `BSC_RPC_URL`（脚本会自动尝试多个 fallback）；桥接 tx 成功但 BSC 检查超时不会记为 failed。
+步骤 5 默认与 legacy `bridge.js` 相同：**发完桥接 tx 即继续**，不等待 BSC 到账。如需轮询 BSC 余额，手动加 `--check-bridge`（每钱包最多等 600s，BSC RPC 不通时自动跳过检查）。`.env` 中可设置 `BSC_RPC_URL`。
+
+步骤 6 的 `BNB_FEE_AMOUNT` 是留给各钱包付 gas 的，步骤 7 **只归集 USDT**，BNB 留在钱包里不动。USDT 归集约需 0.0002 BNB（3 gwei × 65000），建议 `BNB_FEE_AMOUNT=0.0002` 以上。步骤 7 会在转账前检测 BNB 是否够 gas，不足时 skip 并提示。
 
 ### Dry-run
 
@@ -134,12 +169,12 @@ npm run 04:swap-btcd -- --csv data/01-wallets-private.csv --no-swap
 
 ### 通用参数
 
-| 参数 | 说明 |
-|------|------|
-| `--csv PATH` | 钱包 CSV 路径（步骤 2–7 必填） |
-| `--delay-min` / `--delay-max` | 随机延迟（秒） |
-| `--dry-run` | 模拟，不发交易 |
-| `--yes` | 跳过确认 |
+| 参数 | 说明 | 默认 |
+|------|------|------|
+| `--csv PATH` | 钱包 CSV 路径（步骤 2–7 必填） | — |
+| `--delay-min` / `--delay-max` | 钱包间随机延迟（秒） | 1 / 3 |
+| `--dry-run` | 模拟，不发交易 | — |
+| `--yes` | 跳过确认（npm 脚本已内置） | — |
 
 ---
 

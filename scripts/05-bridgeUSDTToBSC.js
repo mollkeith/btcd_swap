@@ -118,15 +118,20 @@ let csvPath;
   console.log(`  bridge:       ${bridgeContract}`);
   console.log(`  dest chain:   ${PGP.BRIDGE_DEST_CHAIN_ID}`);
   console.log(`  wallets:      ${jobs.length}`);
-  console.log(`  check bridge: ${args.checkBridge}`);
+  let checkBridge = args.checkBridge;
+  console.log(`  check bridge: ${checkBridge}`);
   console.log(`  mode:         ${args.dryRun ? "DRY RUN" : "LIVE"}`);
 
-  if (args.checkBridge && !args.dryRun) {
+  if (checkBridge && !args.dryRun) {
     try {
-      const { rpcUrl } = await connectBscProvider();
+      const { rpcUrl } = await connectBscProvider({ timeoutMs: 10_000 });
       console.log(`  BSC RPC:      ${rpcUrl}`);
     } catch (err) {
-      console.warn(`  warning: BSC RPC unreachable (${err.message}); check-bridge may fail`);
+      console.warn(
+        `  warning: BSC RPC unreachable — disabling check-bridge (${err.message})\n` +
+          "  bridge txs will still be sent; BSC arrival may take several minutes."
+      );
+      checkBridge = false;
     }
   }
 
@@ -162,25 +167,33 @@ let csvPath;
 
       if (result.status === "ok") {
         console.log(`  bridge tx: ${result.bridge_tx}`);
-        if (args.checkBridge && !args.dryRun) {
+        if (!checkBridge) {
+          console.log("  note: BSC arrival may take several minutes (use --check-bridge to poll)");
+        } else if (!args.dryRun) {
           console.log(`  polling BSC USDT for ${recipient} (timeout ${args.checkTimeout}s)...`);
           try {
             const arrival = await checkBridgeArrival(recipient, {
               expectedMinWei: parseUnits(result.usdt_bridged || "0", 18) * 99n / 100n,
               timeoutSec: args.checkTimeout,
+              onProgress: ({ elapsedSec, balance_fmt, target_fmt }) => {
+                process.stdout.write(
+                  `\r  waiting BSC... ${elapsedSec}s balance=${balance_fmt} need=${target_fmt}   `
+                );
+              },
             });
+            process.stdout.write("\n");
             result.bsc_arrival = arrival;
             if (arrival.arrived) {
               console.log(`  BSC arrival: yes balance=${arrival.balance_fmt}`);
+            } else if (arrival.rpc_unreachable) {
+              result.bsc_check = "rpc_unreachable";
+              console.log(`  BSC check skipped: RPC unreachable (${arrival.rpc_error})`);
             } else {
               result.bsc_check = "timeout";
               console.log(
                 `  BSC arrival: pending (balance=${arrival.balance_fmt}, ` +
                   `expected +${result.usdt_bridged})`
               );
-              if (arrival.rpc_error) {
-                console.log(`  BSC RPC note: ${arrival.rpc_error}`);
-              }
             }
           } catch (err) {
             result.bsc_check = "error";

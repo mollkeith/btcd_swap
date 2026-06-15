@@ -21,7 +21,7 @@ function printHelp() {
 
 options:
   --csv PATH              Wallet CSV (required)
-  --collect-bnb           Also send remaining BNB (minus gas) to collector
+  --collect-bnb           Also sweep remaining BNB to collector (optional; normally leave BNB as gas)
   --min-usdt MIN          Skip if USDT below (default: 0.01)
   --delay-min / --delay-max
   --gas-price-gwei GWEI   BSC gas (default BSC_GAS_PRICE_GWEI)
@@ -45,6 +45,29 @@ function parseArgs(argv) {
   });
   if (args.help) { printHelp(); process.exit(0); }
   return args;
+}
+
+function gasCost(gasPrice, gasLimit) {
+  return gasPrice * BigInt(gasLimit);
+}
+
+/** Minimum BNB (wei) required before attempting collection txs. */
+function requiredBnbWei({ gasPrice, gasLimitTransfer, gasLimitBnb, collectUsdt, collectBnb }) {
+  let need = 0n;
+  if (collectUsdt) {
+    need += gasCost(gasPrice, gasLimitTransfer);
+  }
+  if (collectBnb) {
+    need += gasCost(gasPrice, gasLimitBnb);
+  }
+  return need;
+}
+
+function bnbShortfallMessage(bnbBal, need, gasPriceGwei) {
+  return (
+    `insufficient BNB for gas (have ${fmtAmount(bnbBal)}, need ~${fmtAmount(need)} ` +
+    `at ${gasPriceGwei} gwei)`
+  );
 }
 
 async function main() {
@@ -81,12 +104,19 @@ let csvPath;
   const gasPrice = parseUnits(String(args.gasPriceGwei), "gwei");
   const gasLimitTransfer = DEFAULT_GAS.gasLimitTransfer;
   const gasLimitBnb = DEFAULT_GAS.gasLimitBnbTransfer;
+  const usdtGasCost = gasCost(gasPrice, gasLimitTransfer);
+  const bnbGasCost = gasCost(gasPrice, gasLimitBnb);
 
   console.log("Collect USDT on BSC");
   console.log(`  collector: ${collectAddress}`);
   console.log(`  CSV:       ${csvPath}`);
   console.log(`  wallets:   ${jobs.length}`);
   console.log(`  collect BNB: ${args.collectBnb}`);
+  console.log(`  gas price: ${args.gasPriceGwei} gwei`);
+  console.log(
+    `  gas need:  USDT tx ~${fmtAmount(usdtGasCost)} BNB` +
+      (args.collectBnb ? `, BNB tx ~${fmtAmount(bnbGasCost)} BNB` : "")
+  );
   console.log(`  mode:      ${args.dryRun ? "DRY RUN" : "LIVE"}`);
 
   if (!args.yes && !args.dryRun) {
@@ -113,9 +143,24 @@ let csvPath;
 
     try {
       const usdtBal = await usdt.balanceOf(wallet.address);
+      const bnbBal = await provider.getBalance(wallet.address);
       result.usdt_before = fmtAmount(usdtBal);
+      result.bnb_before = fmtAmount(bnbBal);
+      console.log(`  balance: ${result.usdt_before} USDT, ${result.bnb_before} BNB`);
 
-      if (usdtBal < minUsdtWei) {
+      const willCollectUsdt = usdtBal >= minUsdtWei;
+      const bnbNeed = requiredBnbWei({
+        gasPrice,
+        gasLimitTransfer,
+        gasLimitBnb,
+        collectUsdt: willCollectUsdt,
+        collectBnb: args.collectBnb,
+      });
+
+      if (willCollectUsdt && bnbBal < bnbNeed) {
+        result.reason = bnbShortfallMessage(bnbBal, bnbNeed, args.gasPriceGwei);
+        console.log(`  skipped: ${result.reason}`);
+      } else if (!willCollectUsdt) {
         result.reason = `USDT below min (${fmtAmount(minUsdtWei)})`;
         console.log(`  skipped: ${result.reason}`);
       } else {
@@ -134,10 +179,9 @@ let csvPath;
       }
 
       if (args.collectBnb) {
-        const bnbBal = await provider.getBalance(wallet.address);
-        const gasCost = gasPrice * BigInt(gasLimitBnb);
-        const sendValue = bnbBal > gasCost ? bnbBal - gasCost : 0n;
-        result.bnb_before = fmtAmount(bnbBal);
+        const bnbBalAfter = await provider.getBalance(wallet.address);
+        const sendValue = bnbBalAfter > bnbGasCost ? bnbBalAfter - bnbGasCost : 0n;
+        result.bnb_after_usdt = fmtAmount(bnbBalAfter);
 
         if (sendValue > 0n) {
           const bnbHash = await sendLegacyTx(wallet, {
@@ -150,9 +194,15 @@ let csvPath;
           }, { dryRun: args.dryRun });
           result.bnb_collected = fmtAmount(sendValue);
           result.bnb_tx = bnbHash;
+          if (result.status === "skipped") {
+            result.status = "ok";
+          }
           console.log(`  BNB tx: ${bnbHash} (${result.bnb_collected} BNB)`);
+        } else if (bnbBalAfter > 0n && bnbBalAfter < bnbGasCost) {
+          result.bnb_skipped = bnbShortfallMessage(bnbBalAfter, bnbGasCost, args.gasPriceGwei);
+          console.log(`  BNB skipped: ${result.bnb_skipped}`);
         } else {
-          result.bnb_skipped = "insufficient BNB after gas reserve";
+          result.bnb_skipped = "no BNB to collect";
         }
       }
     } catch (err) {
