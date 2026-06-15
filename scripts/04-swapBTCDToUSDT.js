@@ -14,13 +14,14 @@ import { parseCommonFlags } from "../lib/args.js";
 import { createLogger } from "../lib/logger.js";
 import { loadWalletsFromCsv } from "../lib/wallet.js";
 import { randomDelay } from "../lib/random.js";
+import { requireCsvPath } from "../lib/walletCsv.js";
 import { readFeeBps, processSwapWallet, previewWalletBalances } from "../lib/swap.js";
 
 function printHelp() {
   console.log(`usage: node swapBTCDToUSDT.js [options]
 
 options:
-  --csv PATH              Private key CSV (default: data/wallets-private.csv)
+  --csv PATH              Wallet CSV (required)
   --amount AMOUNT         BTCD per wallet or "all" (default: all)
   --min-btcd MIN          Skip below this BTCD (default: 0.01)
   --no-swap               Preview balances only, no transactions
@@ -52,7 +53,13 @@ async function main() {
   try { args = parseArgs(process.argv.slice(2)); }
   catch (err) { console.error(`error: ${err.message}`); process.exit(1); }
 
-  const csvPath = join(PROJECT_ROOT, args.csv);
+let csvPath;
+  try {
+    csvPath = join(PROJECT_ROOT, requireCsvPath(args));
+  } catch (err) {
+    console.error(`error: ${err.message}`);
+    process.exit(1);
+  }
   let jobs;
   try { jobs = loadWalletsFromCsv(csvPath); }
   catch (err) { console.error(`error: ${err.message}`); process.exit(1); }

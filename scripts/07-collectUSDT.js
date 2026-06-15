@@ -6,19 +6,21 @@
 import dotenv from "dotenv";
 import { join } from "node:path";
 import { PROJECT_ROOT } from "../lib/paths.js";
-import { Contract, JsonRpcProvider, Wallet, parseUnits } from "ethers";
+import { Contract, Wallet, parseUnits } from "ethers";
 import { BSC, DEFAULT_GAS, ERC20_ABI } from "../lib/constants.js";
+import { connectBscProvider } from "../lib/provider.js";
 import { fmtAmount, confirmProceed, sendLegacyTx } from "../lib/common.js";
 import { parseCommonFlags } from "../lib/args.js";
 import { createLogger } from "../lib/logger.js";
 import { loadWalletsFromCsv, loadMasterWallet, getCollectAddress } from "../lib/wallet.js";
 import { randomDelay } from "../lib/random.js";
+import { requireCsvPath } from "../lib/walletCsv.js";
 
 function printHelp() {
   console.log(`usage: node collectUSDT.js [options]
 
 options:
-  --csv PATH              Private key CSV (default: data/wallets-private.csv)
+  --csv PATH              Wallet CSV (required)
   --collect-bnb           Also send remaining BNB (minus gas) to collector
   --min-usdt MIN          Skip if USDT below (default: 0.01)
   --delay-min / --delay-max
@@ -52,13 +54,25 @@ async function main() {
   try { args = parseArgs(process.argv.slice(2)); }
   catch (err) { console.error(`error: ${err.message}`); process.exit(1); }
 
-  const provider = new JsonRpcProvider(BSC.RPC_URL, BSC.CHAIN_ID);
-  await provider.getBlockNumber();
+  let provider;
+  let bscRpcUrl;
+  try {
+    ({ provider, rpcUrl: bscRpcUrl } = await connectBscProvider());
+  } catch (err) {
+    console.error(`error: ${err.message}`);
+    process.exit(1);
+  }
 
   const master = loadMasterWallet(provider);
   const collectAddress = getCollectAddress(master);
 
-  const csvPath = join(PROJECT_ROOT, args.csv);
+let csvPath;
+  try {
+    csvPath = join(PROJECT_ROOT, requireCsvPath(args));
+  } catch (err) {
+    console.error(`error: ${err.message}`);
+    process.exit(1);
+  }
   let jobs;
   try { jobs = loadWalletsFromCsv(csvPath); }
   catch (err) { console.error(`error: ${err.message}`); process.exit(1); }

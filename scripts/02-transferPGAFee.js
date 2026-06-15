@@ -15,12 +15,13 @@ import { parseCommonFlags } from "../lib/args.js";
 import { createLogger } from "../lib/logger.js";
 import { loadMasterWallet } from "../lib/wallet.js";
 import { randomDelay } from "../lib/random.js";
+import { requireCsvPath } from "../lib/walletCsv.js";
 
 function printHelp() {
   console.log(`usage: node transferPGAFee.js [options]
 
 options:
-  --csv PATH              Address CSV (default: data/wallets.csv)
+  --csv PATH              Wallet CSV (required)
   --pga-amount PGA        PGA per address (default: 2, or PGA_FEE_AMOUNT in .env)
   --gas-limit LIMIT       Gas limit (default: 31500)
   --delay-min / --delay-max
@@ -33,7 +34,6 @@ options:
 function parseArgs(argv) {
   const args = parseCommonFlags(argv, {
     defaults: {
-      csv: "data/wallets.csv",
       pgaAmount: process.env.PGA_FEE_AMOUNT || "2",
       gasLimit: DEFAULT_GAS.gasLimitPgaTransfer,
     },
@@ -55,7 +55,15 @@ async function main() {
   try { args = parseArgs(process.argv.slice(2)); }
   catch (err) { console.error(`error: ${err.message}`); process.exit(1); }
 
-  const rows = readWalletsCsv(join(PROJECT_ROOT, args.csv), { requirePrivateKey: false });
+let csvPath;
+  try {
+    csvPath = join(PROJECT_ROOT, requireCsvPath(args));
+  } catch (err) {
+    console.error(`error: ${err.message}`);
+    process.exit(1);
+  }
+
+  const rows = readWalletsCsv(csvPath, { requirePrivateKey: false });
   const provider = new JsonRpcProvider(PGP.RPC_URL, PGP.CHAIN_ID);
   await provider.getBlockNumber();
 

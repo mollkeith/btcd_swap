@@ -5,3 +5,5 @@ bridge-results.json
 node_modules/
 data/
 logs/
+data/latest-batch.json
+data/batches.json

@@ -6,20 +6,22 @@
 import dotenv from "dotenv";
 import { join } from "node:path";
 import { PROJECT_ROOT } from "../lib/paths.js";
-import { JsonRpcProvider, parseUnits } from "ethers";
+import { parseUnits } from "ethers";
 import { BSC, DEFAULT_GAS } from "../lib/constants.js";
+import { connectBscProvider } from "../lib/provider.js";
 import { fmtAmount, confirmProceed, sendLegacyTx } from "../lib/common.js";
 import { readWalletsCsv } from "../lib/csv.js";
 import { parseCommonFlags } from "../lib/args.js";
 import { createLogger } from "../lib/logger.js";
 import { loadMasterWallet } from "../lib/wallet.js";
 import { randomDelay } from "../lib/random.js";
+import { requireCsvPath } from "../lib/walletCsv.js";
 
 function printHelp() {
   console.log(`usage: node transferBNBFee.js [options]
 
 options:
-  --csv PATH              Address CSV (default: data/wallets.csv)
+  --csv PATH              Wallet CSV (required)
   --bnb-amount BNB        BNB per address (default: 0.002, or BNB_FEE_AMOUNT in .env)
   --gas-limit LIMIT       Gas limit (default: 21000)
   --delay-min / --delay-max
@@ -32,7 +34,6 @@ options:
 function parseArgs(argv) {
   const args = parseCommonFlags(argv, {
     defaults: {
-      csv: "data/wallets.csv",
       bnbAmount: process.env.BNB_FEE_AMOUNT || "0.002",
       gasLimit: DEFAULT_GAS.gasLimitBnbTransfer,
       gasPriceGwei: DEFAULT_GAS.bscGwei,
@@ -55,9 +56,23 @@ async function main() {
   try { args = parseArgs(process.argv.slice(2)); }
   catch (err) { console.error(`error: ${err.message}`); process.exit(1); }
 
-  const rows = readWalletsCsv(join(PROJECT_ROOT, args.csv), { requirePrivateKey: false });
-  const provider = new JsonRpcProvider(BSC.RPC_URL, BSC.CHAIN_ID);
-  await provider.getBlockNumber();
+let csvPath;
+  try {
+    csvPath = join(PROJECT_ROOT, requireCsvPath(args));
+  } catch (err) {
+    console.error(`error: ${err.message}`);
+    process.exit(1);
+  }
+
+  const rows = readWalletsCsv(csvPath, { requirePrivateKey: false });
+  let provider;
+  let bscRpcUrl;
+  try {
+    ({ provider, rpcUrl: bscRpcUrl } = await connectBscProvider());
+  } catch (err) {
+    console.error(`error: ${err.message}`);
+    process.exit(1);
+  }
 
   const master = loadMasterWallet(provider);
   const amountWei = parseUnits(String(args.bnbAmount), 18);
@@ -67,7 +82,7 @@ async function main() {
 
   console.log("Transfer BNB fee from master (BSC)");
   console.log(`  master:  ${master.address}`);
-  console.log(`  RPC:     ${BSC.RPC_URL}`);
+  console.log(`  RPC:     ${bscRpcUrl}`);
   console.log(`  amount:  ${args.bnbAmount} BNB each`);
   console.log(`  wallets: ${rows.length}`);
   console.log(`  mode:    ${args.dryRun ? "DRY RUN" : "LIVE"}`);

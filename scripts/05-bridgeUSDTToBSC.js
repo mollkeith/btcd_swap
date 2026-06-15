@@ -14,13 +14,15 @@ import { parseCommonFlags } from "../lib/args.js";
 import { createLogger } from "../lib/logger.js";
 import { loadWalletsFromCsv } from "../lib/wallet.js";
 import { randomDelay } from "../lib/random.js";
+import { requireCsvPath } from "../lib/walletCsv.js";
 import { processBridgeWallet, checkBridgeArrival } from "../lib/bridge.js";
+import { connectBscProvider } from "../lib/provider.js";
 
 function printHelp() {
   console.log(`usage: node bridgeUSDTToBSC.js [options]
 
 options:
-  --csv PATH
+  --csv PATH              Wallet CSV (required)
   --amount AMOUNT         USDT per wallet or "all" (default: all)
   --min-usdt MIN          Skip below this USDT (default: 0.01)
   --recipient ADDRESS     BSC recipient (default: same wallet)
@@ -84,7 +86,13 @@ async function main() {
     process.exit(1);
   }
 
-  const csvPath = join(PROJECT_ROOT, args.csv);
+let csvPath;
+  try {
+    csvPath = join(PROJECT_ROOT, requireCsvPath(args));
+  } catch (err) {
+    console.error(`error: ${err.message}`);
+    process.exit(1);
+  }
   let jobs;
   try {
     jobs = loadWalletsFromCsv(csvPath);
@@ -112,6 +120,15 @@ async function main() {
   console.log(`  wallets:      ${jobs.length}`);
   console.log(`  check bridge: ${args.checkBridge}`);
   console.log(`  mode:         ${args.dryRun ? "DRY RUN" : "LIVE"}`);
+
+  if (args.checkBridge && !args.dryRun) {
+    try {
+      const { rpcUrl } = await connectBscProvider();
+      console.log(`  BSC RPC:      ${rpcUrl}`);
+    } catch (err) {
+      console.warn(`  warning: BSC RPC unreachable (${err.message}); check-bridge may fail`);
+    }
+  }
 
   if (!args.yes && !args.dryRun) {
     const ok = await confirmProceed("\nProceed with live bridge transactions? [y/N] ");
@@ -145,16 +162,31 @@ async function main() {
 
       if (result.status === "ok") {
         console.log(`  bridge tx: ${result.bridge_tx}`);
-        if (args.checkBridge && result.status === "ok" && !args.dryRun) {
-          console.log(`  polling BSC USDT for ${recipient}...`);
-          const arrival = await checkBridgeArrival(recipient, {
-            expectedMinWei: parseUnits(result.usdt_bridged || "0", 18) * 99n / 100n,
-            timeoutSec: args.checkTimeout,
-          });
-          result.bsc_arrival = arrival;
-          console.log(
-            `  BSC arrival: ${arrival.arrived ? "yes" : "timeout"} balance=${arrival.balance_fmt}`
-          );
+        if (args.checkBridge && !args.dryRun) {
+          console.log(`  polling BSC USDT for ${recipient} (timeout ${args.checkTimeout}s)...`);
+          try {
+            const arrival = await checkBridgeArrival(recipient, {
+              expectedMinWei: parseUnits(result.usdt_bridged || "0", 18) * 99n / 100n,
+              timeoutSec: args.checkTimeout,
+            });
+            result.bsc_arrival = arrival;
+            if (arrival.arrived) {
+              console.log(`  BSC arrival: yes balance=${arrival.balance_fmt}`);
+            } else {
+              result.bsc_check = "timeout";
+              console.log(
+                `  BSC arrival: pending (balance=${arrival.balance_fmt}, ` +
+                  `expected +${result.usdt_bridged})`
+              );
+              if (arrival.rpc_error) {
+                console.log(`  BSC RPC note: ${arrival.rpc_error}`);
+              }
+            }
+          } catch (err) {
+            result.bsc_check = "error";
+            result.bsc_check_error = err.message;
+            console.log(`  BSC check failed (bridge tx ok): ${err.message}`);
+          }
         }
       } else {
         console.log(`  ${result.status}: ${result.reason || ""}`);
@@ -180,10 +212,11 @@ async function main() {
   const ok = results.filter((r) => r.status === "ok").length;
   const skipped = results.filter((r) => r.status === "skipped").length;
   const failed = results.filter((r) => r.status === "failed").length;
+  const bscPending = results.filter((r) => r.bsc_check === "timeout" || r.bsc_check === "error").length;
 
-  const summaryPath = logger.writeSummary({ ok, skipped, failed });
+  const summaryPath = logger.writeSummary({ ok, skipped, failed, bsc_pending: bscPending });
 
-  console.log(`\nDone: ok=${ok}, skipped=${skipped}, failed=${failed}`);
+  console.log(`\nDone: ok=${ok}, skipped=${skipped}, failed=${failed}, bsc_pending=${bscPending}`);
   console.log(`Log: ${logger.logPath}`);
   console.log(`Summary: ${summaryPath}`);
 
