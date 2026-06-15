@@ -1,0 +1,7 @@
+.venv/
+.env
+swap-results.json
+bridge-results.json
+node_modules/
+data/
+logs/

@@ -1,0 +1,23 @@
+{
+  "name": "btcd-swap",
+  "version": "1.0.0",
+  "private": true,
+  "type": "module",
+  "scripts": {
+    "01:create-wallets": "node scripts/01-createWallets.js",
+    "02:transfer-pga": "node scripts/02-transferPGAFee.js --yes",
+    "03:transfer-btcd": "node scripts/03-transferBTCDToWallets.js --yes",
+    "04:swap-btcd": "node scripts/04-swapBTCDToUSDT.js --yes",
+    "05:bridge-usdt": "node scripts/05-bridgeUSDTToBSC.js --yes --check-bridge",
+    "06:transfer-bnb": "node scripts/06-transferBNBFee.js --yes",
+    "07:collect-usdt": "node scripts/07-collectUSDT.js --yes --collect-bnb",
+    "swap-legacy": "node scripts/legacy/swap.js --yes",
+    "swap-legacy-dry-run": "node scripts/legacy/swap.js --dry-run --yes",
+    "bridge-legacy": "node scripts/legacy/bridge.js --yes",
+    "bridge-legacy-dry-run": "node scripts/legacy/bridge.js --dry-run --yes"
+  },
+  "dependencies": {
+    "dotenv": "^16.4.7",
+    "ethers": "^6.13.5"
+  }
+}
