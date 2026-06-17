@@ -26,8 +26,10 @@ function printHelp() {
   --csv PATH              Private wallet CSV (required)
   --amount AMOUNT         PGA or "all" (default: all)
   --min-pga MIN           Skip below (default: 0.05)
-  --slippage-bps BPS      Slippage in basis points (default: 100 = 1%)
-  --slippage PCT          Slippage percent, e.g. 1 = 1% (overrides --slippage-bps)
+  --slippage-bps BPS      Slippage in basis points (default: 600 = 6%)
+  --slippage PCT          Slippage percent, e.g. 6 = 6% (overrides --slippage-bps)
+                          NOTE: PGA has a ~3.5% on-transfer sell tax — slippage MUST
+                          exceed it (use >= 5%), or the swap reverts.
   --delay-min / --delay-max
   --gas-price-gwei GWEI   BSC gas (default BSC_GAS_PRICE_GWEI)
   --dry-run  --yes
@@ -39,7 +41,7 @@ function parseArgs(argv) {
     defaults: {
       amount: "all",
       minPga: 0.05,
-      slippageBps: 100,
+      slippageBps: 600, // PGA has a ~3.5% sell tax; slippage must exceed it
       slippagePct: null,
       gasPriceGwei: DEFAULT_GAS.bscGwei,
     },
