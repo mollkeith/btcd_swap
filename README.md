@@ -14,7 +14,7 @@ btcd-swap/
 │   ├── 05-bridgeUSDTToBSC.js
 │   ├── 06-transferBNBFee.js
 │   ├── 07-collectUSDT.js
-│   └── 08-transferPGChainUSDT.js
+│   ├── 08-transferPGChainUSDT.js
 │   ├── 09-collectBNB.js
 │   ├── fist/              # BTCD -> FIST -> Pancake USDT 流程
 │   │   ├── 01-createWallets.js
@@ -46,14 +46,14 @@ btcd-swap/
 
 ## 合约地址
 
-| 项目 | 地址 |
-|------|------|
+| 项目          | 地址                                         |
+| ------------- | -------------------------------------------- |
 | BTCD 兑换合约 | `0xFF60725F03531DCeE7f91d731cd002Fc78aB497F` |
-| BTCD (PGP) | `0xF9BF836FEd97a9c9Bfe4D4c28316b9400C59Cc6B` |
-| USDT (PGP) | `0xdF72788af68E7902F61377D246Dd502b0b383385` |
-| 跨链桥合约 | `0xDBB35259372B2f0cB6b85dD31761C0fB3652Fd11` |
-| USDT (BSC) | `0x55d398326f99059fF775485246999027B3197955` |
-| 目标链 | BSC (chainId = 56) |
+| BTCD (PGP)    | `0xF9BF836FEd97a9c9Bfe4D4c28316b9400C59Cc6B` |
+| USDT (PGP)    | `0xdF72788af68E7902F61377D246Dd502b0b383385` |
+| 跨链桥合约    | `0xDBB35259372B2f0cB6b85dD31761C0fB3652Fd11` |
+| USDT (BSC)    | `0x55d398326f99059fF775485246999027B3197955` |
+| 目标链        | BSC (chainId = 56)                           |
 
 ---
 
@@ -72,11 +72,11 @@ npm install
 
 每次执行步骤 1 自动递增序号，**不会覆盖**已有文件：
 
-| 文件 | 说明 |
-|------|------|
-| `data/01-wallets.csv` | 地址（步骤 2、3、6 使用） |
+| 文件                          | 说明                        |
+| ----------------------------- | --------------------------- |
+| `data/01-wallets.csv`         | 地址（步骤 2、3、6 使用）   |
 | `data/01-wallets-private.csv` | 含私钥（步骤 4、5、7 使用） |
-| `data/02-wallets.csv` | 下一批… |
+| `data/02-wallets.csv`         | 下一批…                     |
 
 步骤 2–7 **必须**通过 `--csv` 指定要操作的文件。
 
@@ -118,7 +118,7 @@ npm run 02:transfer-pga -- --csv data/01-wallets.csv
 npm run 03:transfer-btcd -- --csv data/01-wallets.csv --min-btcd 1 --max-btcd 100
 
 # 4. 各钱包将 BTCD 兑换为 USDT（需 private CSV）
-npm run 04:swap-btcd -- --csv data/01-wallets-private.csv 
+npm run 04:swap-btcd -- --csv data/01-wallets-private.csv
 
 # 5. 各钱包将 PGP USDT 跨链到 BSC（发完即继续，不等 BSC 到账）
 npm run 05:bridge-usdt -- --csv data/01-wallets-private.csv --delay-min 600 --delay-max 700
@@ -158,20 +158,20 @@ npm run 03:transfer-btcd -- --csv data/01-wallets.csv --min-btcd 1 --max-btcd 5 
 
 脚本在 `scripts/fist/`，npm 命令前缀 `fist:`。授权与 swap/bridge 分步执行：
 
-| 步骤 | 命令 | CSV |
-|------|------|-----|
-| 1 | `fist:01:create-wallets` | — |
-| 2 | `fist:02:transfer-pga` | public |
-| 3 | `fist:03:transfer-btcd` | public |
-| 4 | `fist:04:approve-btcd` | private |
-| 5 | `fist:05:swap-btcd-fist` | private |
-| 6 | `fist:06:approve-fist` | private |
-| 7 | `fist:07:bridge-fist` | private |
-| 8 | `fist:08:transfer-bnb` | public |
-| 9 | `fist:09:approve-fist-bsc` | private |
-| 10 | `fist:10:swap-fist-usdt` | private |
-| 11 | `fist:11:collect-usdt` | private |
-| 12 | `fist:12:collect-bnb` | private |
+| 步骤 | 命令                       | CSV     |
+| ---- | -------------------------- | ------- |
+| 1    | `fist:01:create-wallets`   | —       |
+| 2    | `fist:02:transfer-pga`     | public  |
+| 3    | `fist:03:transfer-btcd`    | public  |
+| 4    | `fist:04:approve-btcd`     | private |
+| 5    | `fist:05:swap-btcd-fist`   | private |
+| 6    | `fist:06:approve-fist`     | private |
+| 7    | `fist:07:bridge-fist`      | private |
+| 8    | `fist:08:transfer-bnb`     | public  |
+| 9    | `fist:09:approve-fist-bsc` | private |
+| 10   | `fist:10:swap-fist-usdt`   | private |
+| 11   | `fist:11:collect-usdt`     | private |
+| 12   | `fist:12:collect-bnb`      | private |
 
 ```bash
 npm run fist:01:create-wallets -- --count 5
@@ -197,18 +197,18 @@ npm run fist:12:collect-bnb -- --csv data/01-wallets-private.csv
 
 与 FIST 类似，授权与 swap/bridge **分步执行**；在 PGP 链上用**兑换合约**直接 BTCD→USDT，再跨链到 BSC（无需 Pancake swap）。npm 命令前缀 `pga:`。
 
-| 步骤 | 命令 | CSV |
-|------|------|-----|
-| 1 | `pga:01:create-wallets` | — |
-| 2 | `pga:02:transfer-pga` | public |
-| 3 | `pga:03:transfer-btcd` | public |
-| 4 | `pga:04:approve-btcd` | private |
-| 5 | `pga:05:swap-btcd-usdt` | private |
-| 6 | `pga:06:approve-usdt` | private |
-| 7 | `pga:07:bridge-usdt` | private |
-| 8 | `pga:08:transfer-bnb` | public |
-| 9 | `pga:09:collect-usdt` | private |
-| 10 | `pga:10:collect-bnb` | private |
+| 步骤 | 命令                    | CSV     |
+| ---- | ----------------------- | ------- |
+| 1    | `pga:01:create-wallets` | —       |
+| 2    | `pga:02:transfer-pga`   | public  |
+| 3    | `pga:03:transfer-btcd`  | public  |
+| 4    | `pga:04:approve-btcd`   | private |
+| 5    | `pga:05:swap-btcd-usdt` | private |
+| 6    | `pga:06:approve-usdt`   | private |
+| 7    | `pga:07:bridge-usdt`    | private |
+| 8    | `pga:08:transfer-bnb`   | public  |
+| 9    | `pga:09:collect-usdt`   | private |
+| 10   | `pga:10:collect-bnb`    | private |
 
 ```bash
 npm run pga:01:create-wallets -- --count 5
@@ -228,31 +228,76 @@ npm run pga:10:collect-bnb -- --csv data/01-wallets-private.csv
 
 步骤 5 会读取合约 fee bps 并显示预估 USDT，执行前需确认。步骤 4/6 仅 approve；步骤 5/7 会在需要时自动 approve。
 
+### PGA-coin 流程（BTCD → 原生 PGA → 跨链 BSC → Pancake USDT）
+
+脚本在 `scripts/pga-coin/`，npm 命令前缀 `pgacoin:`。在 PGP 链上把 BTCD 换成**原生 PGA**，跨链到 BSC 后用 PancakeSwap 换 USDT。
+
+| 步骤 | 命令                         | CSV     |
+| ---- | ---------------------------- | ------- |
+| 1    | `pgacoin:01:create-wallets`  | —       |
+| 2    | `pgacoin:02:transfer-pga`    | public  |
+| 3    | `pgacoin:03:transfer-btcd`   | public  |
+| 4    | `pgacoin:04:approve-btcd`    | private |
+| 5    | `pgacoin:05:swap-btcd-pga`   | private |
+| 6    | `pgacoin:06:bridge-pga`      | private |
+| 7    | `pgacoin:07:transfer-bnb`    | public  |
+| 8    | `pgacoin:08:approve-pga-bsc` | private |
+| 9    | `pgacoin:09:swap-pga-usdt`   | private |
+| 10   | `pgacoin:10:collect-usdt`    | private |
+| 11   | `pgacoin:11:collect-bnb`     | private |
+
+```bash
+npm run pgacoin:01:create-wallets -- --count 10
+npm run pgacoin:02:transfer-pga -- --csv data/01-wallets.csv
+npm run pgacoin:03:transfer-btcd -- --csv data/01-wallets.csv --min-btcd 1 --max-btcd 100
+npm run pgacoin:04:approve-btcd -- --csv data/01-wallets-private.csv
+npm run pgacoin:05:swap-btcd-pga -- --csv data/01-wallets-private.csv --slippage 1
+npm run pgacoin:06:bridge-pga -- --csv data/01-wallets-private.csv --min-pga 10 --delay-min 600 --delay-max 700
+# 等待 BSC PGA 到账后
+npm run pgacoin:07:transfer-bnb -- --csv data/01-wallets.csv
+npm run pgacoin:08:approve-pga-bsc -- --csv data/01-wallets-private.csv
+npm run pgacoin:09:swap-pga-usdt -- --csv data/01-wallets-private.csv --slippage 6 --gas-price-gwei 1
+npm run pgacoin:10:collect-usdt -- --csv data/01-wallets-private.csv --gas-price-gwei 1
+npm run pgacoin:11:collect-bnb -- --csv data/01-wallets-private.csv --gas-price-gwei 1
+```
+
+合约：PG BTCD `0xF9BF…Cc6B` → **原生 PGA**（PGARouterV2 `0x3F67…7bA8`，`FastSwapTokenToEth`，按 `[BTCD, WPGA]` 估价）→ 跨链桥 `0xDBB3…Fd11`（`BridgeEth(recipient, destChainId)` **payable**）→ BSC PGA `0xC3e0…8888`（18 位）→ Pancake V2 USDT。
+
+**与 FIST 流程的关键差异 / 注意事项**：
+
+- **步骤 6 桥的是原生 PGA（payable，无需 approve）**，所以没有「approve-pga」这一步。
+- **PGA 既是资产又是 gas**：步骤 6 的 `--amount all` 会自动保留一笔 gas（`--reserve` 可指定保留多少 PGA，默认约 2×桥交易 gas），其余全部跨出。
+- **⚠️ PGA 在 BSC 是带税代币（实测约 3.5% 卖出税）**：步骤 9 必须用 `swapExactTokensForTokensSupportingFeeOnTransferTokens`（已内置），且 **滑点 ≥5%（默认 6%）**，否则普通 swap 会 revert `Pancake: K`。`getAmountsOut` 是税前报价，实际到手约少 3.5%。
+- **BSC gas**：默认 1 gwei（网络底价约 0.05 gwei，旧默认 3 gwei 是 60 倍超付）；`.env` 中 `BSC_GAS_PRICE_GWEI` 可调，或命令加 `--gas-price-gwei`。
+- **RPC 容错**：BSC provider 在某节点 503 / 超时时自动切换到备用节点（`lib/provider.js`），不会因单点过载整批失败。
+- 步骤 5/9 在需要时自动 approve；步骤 4/8 仅 approve。步骤 9 的 gas 门槛会按是否还需 approve 动态计算。
+- ⚠️ BSC 端 PGA/USDT 池较浅，大额请用 `--slippage` 控制并分批。
+- **⚠️ 跨链风控**：项目方对非社区地址有风控，可能拦截部分 `BridgeEth` 在 BSC 端的放行（PGP 端已扣、BSC 端未到）；被拦的需走项目方社区通道找回。
+
 ### 命令一览
 
-| 步骤 | npm 命令 |
-|------|----------|
-| 1 | `npm run 01:create-wallets -- --count N` |
-| 2 | `npm run 02:transfer-pga -- --csv data/NN-wallets.csv` |
-| 3 | `npm run 03:transfer-btcd -- --csv data/NN-wallets.csv --min-btcd X --max-btcd Y` |
-| 4 | `npm run 04:swap-btcd -- --csv data/NN-wallets-private.csv` |
-| 5 | `npm run 05:bridge-usdt -- --csv data/NN-wallets-private.csv` |
-| 6 | `npm run 06:transfer-bnb -- --csv data/NN-wallets.csv` |
-| 7 | `npm run 07:collect-usdt -- --csv data/NN-wallets-private.csv` |
-| 8 | `npm run 08:transfer-pg-usdt -- --csv data/NN-wallets.csv --min-usdt X --max-usdt Y` |
-
-| 9 | `npm run 09:collect-bnb -- --csv data/NN-wallets-private.csv` |
+| 步骤 | npm 命令                                                                             |
+| ---- | ------------------------------------------------------------------------------------ |
+| 1    | `npm run 01:create-wallets -- --count N`                                             |
+| 2    | `npm run 02:transfer-pga -- --csv data/NN-wallets.csv`                               |
+| 3    | `npm run 03:transfer-btcd -- --csv data/NN-wallets.csv --min-btcd X --max-btcd Y`    |
+| 4    | `npm run 04:swap-btcd -- --csv data/NN-wallets-private.csv`                          |
+| 5    | `npm run 05:bridge-usdt -- --csv data/NN-wallets-private.csv`                        |
+| 6    | `npm run 06:transfer-bnb -- --csv data/NN-wallets.csv`                               |
+| 7    | `npm run 07:collect-usdt -- --csv data/NN-wallets-private.csv`                       |
+| 8    | `npm run 08:transfer-pg-usdt -- --csv data/NN-wallets.csv --min-usdt X --max-usdt Y` |
+| 9    | `npm run 09:collect-bnb -- --csv data/NN-wallets-private.csv`                        |
 
 步骤 8 从 `.env` 中 `WALLET_PRIVATE_KEY` 主钱包向 CSV 地址分发 **PGP USDT**：每个钱包在 `[min, max]` 内随机金额；`min === max` 时每人相同。转账前打印分配计划并校验 USDT / PGA 余额。
 
 步骤 9 将各 BSC 子钱包剩余 **BNB** 归集到 `COLLECT_ADDRESS`（未设置则用主钱包地址）。每笔发送 `余额 - gas`，gas 按 21000 预留；可归集金额低于 `--min-bnb`（默认 0.00001）时跳过。建议在步骤 7 收完 USDT 后再执行。
 
-| 模式 | 条件 | 行为 |
-|------|------|------|
-| normal | 余额 ≥ N×min 且 ≤ N×max | `[min, max]` 随机分配，末位拿剩余 |
-| exceed | 余额 > N×max | 前 N-1 各给 max，末位吸收全部剩余 |
-| topup | 余额 < N×min，且有地址已持有 BTCD | 只补发给已有 BTCD 的地址 |
-| fallback | 余额 < N×min，且无地址持有 BTCD | 放宽 min，分给全部地址 |
+| 模式     | 条件                              | 行为                              |
+| -------- | --------------------------------- | --------------------------------- |
+| normal   | 余额 ≥ N×min 且 ≤ N×max           | `[min, max]` 随机分配，末位拿剩余 |
+| exceed   | 余额 > N×max                      | 前 N-1 各给 max，末位吸收全部剩余 |
+| topup    | 余额 < N×min，且有地址已持有 BTCD | 只补发给已有 BTCD 的地址          |
+| fallback | 余额 < N×min，且无地址持有 BTCD   | 放宽 min，分给全部地址            |
 
 `amount=0` 的地址会跳过，不发送交易。
 
@@ -269,12 +314,12 @@ npm run 04:swap-btcd -- --csv data/01-wallets-private.csv --no-swap
 
 ### 通用参数
 
-| 参数 | 说明 | 默认 |
-|------|------|------|
-| `--csv PATH` | 钱包 CSV 路径（步骤 2–9 必填） | — |
-| `--delay-min` / `--delay-max` | 钱包间随机延迟（秒） | 1 / 3 |
-| `--dry-run` | 模拟，不发交易 | — |
-| `--yes` | 跳过确认（npm 脚本已内置） | — |
+| 参数                          | 说明                           | 默认  |
+| ----------------------------- | ------------------------------ | ----- |
+| `--csv PATH`                  | 钱包 CSV 路径（步骤 2–9 必填） | —     |
+| `--delay-min` / `--delay-max` | 钱包间随机延迟（秒）           | 1 / 3 |
+| `--dry-run`                   | 模拟，不发交易                 | —     |
+| `--yes`                       | 跳过确认（npm 脚本已内置）     | —     |
 
 ---
 
