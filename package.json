@@ -11,6 +11,7 @@
     "05:bridge-usdt": "node scripts/05-bridgeUSDTToBSC.js --yes",
     "06:transfer-bnb": "node scripts/06-transferBNBFee.js --yes",
     "07:collect-usdt": "node scripts/07-collectUSDT.js --yes",
+    "08:transfer-pg-usdt": "node scripts/08-transferPGChainUSDT.js --yes",
     "fist:01:create-wallets": "node scripts/fist/01-createWallets.js",
     "fist:02:transfer-pga": "node scripts/02-transferPGAFee.js --yes",
     "fist:03:transfer-btcd": "node scripts/03-transferBTCDToWallets.js --yes",
