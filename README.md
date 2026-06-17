@@ -15,6 +15,7 @@ btcd-swap/
 │   ├── 06-transferBNBFee.js
 │   ├── 07-collectUSDT.js
 │   ├── 08-transferPGChainUSDT.js
+│   ├── 09-collectBNB.js
 │   ├── fist/              # BTCD -> FIST -> Pancake USDT 流程
 │   │   ├── 01-createWallets.js
 │   │   ├── 04-approveBTCD.js
@@ -120,6 +121,9 @@ npm run 06:transfer-bnb -- --csv data/01-wallets.csv
 
 # 7. 将 BSC 上的 USDT 归集到主钱包（只收 USDT，BNB 留在子钱包）
 npm run 07:collect-usdt -- --csv data/01-wallets-private.csv
+
+# 9. 将子钱包剩余 BNB 归集到 COLLECT_ADDRESS / 主钱包（USDT 收完后执行）
+npm run 09:collect-bnb -- --csv data/01-wallets-private.csv
 ```
 
 **钱包间交易间隔**：步骤 2–7 默认每处理完一个钱包后随机等待 **1～3 秒**（`--delay-min` / `--delay-max`）。可调长，例如 bridge 间隔 5～10 秒：
@@ -160,20 +164,22 @@ npm run 03:transfer-btcd -- --csv data/01-wallets.csv --min-btcd 1 --max-btcd 5 
 | 9 | `fist:09:approve-fist-bsc` | private |
 | 10 | `fist:10:swap-fist-usdt` | private |
 | 11 | `fist:11:collect-usdt` | private |
+| 12 | `fist:12:collect-bnb` | private |
 
 ```bash
 npm run fist:01:create-wallets -- --count 5
 npm run fist:02:transfer-pga -- --csv data/01-wallets.csv
 npm run fist:03:transfer-btcd -- --csv data/01-wallets.csv --min-btcd 1 --max-btcd 100
 npm run fist:04:approve-btcd -- --csv data/01-wallets-private.csv
-npm run fist:05:swap-btcd-fist -- --csv data/01-wallets-private.csv
+npm run fist:05:swap-btcd-fist -- --csv data/01-wallets-private.csv --slippage 1
 npm run fist:06:approve-fist -- --csv data/01-wallets-private.csv
-npm run fist:07:bridge-fist -- --csv data/01-wallets-private.csv
+npm run fist:07:bridge-fist -- --csv data/01-wallets-private.csv --delay-min 600 --delay-max 700
 # 等待 BSC FIST 到账后
 npm run fist:08:transfer-bnb -- --csv data/01-wallets.csv
 npm run fist:09:approve-fist-bsc -- --csv data/01-wallets-private.csv
-npm run fist:10:swap-fist-usdt -- --csv data/01-wallets-private.csv
+npm run fist:10:swap-fist-usdt -- --csv data/01-wallets-private.csv --slippage 1
 npm run fist:11:collect-usdt -- --csv data/01-wallets-private.csv
+npm run fist:12:collect-bnb -- --csv data/01-wallets-private.csv
 ```
 
 合约：PG BTCD `0xF9BF…Cc6B` → PG FIST `0x800E…4B11`（PGARouterV2 `0x3F67…7bA8`）→ 跨链桥 → BSC FIST `0xc988…bc6a`（6 位小数）→ Pancake V2 USDT。
@@ -192,8 +198,11 @@ npm run fist:11:collect-usdt -- --csv data/01-wallets-private.csv
 | 6 | `npm run 06:transfer-bnb -- --csv data/NN-wallets.csv` |
 | 7 | `npm run 07:collect-usdt -- --csv data/NN-wallets-private.csv` |
 | 8 | `npm run 08:transfer-pg-usdt -- --csv data/NN-wallets.csv --min-usdt X --max-usdt Y` |
+| 9 | `npm run 09:collect-bnb -- --csv data/NN-wallets-private.csv` |
 
 步骤 8 从 `.env` 中 `WALLET_PRIVATE_KEY` 主钱包向 CSV 地址分发 **PGP USDT**：每个钱包在 `[min, max]` 内随机金额；`min === max` 时每人相同。转账前打印分配计划并校验 USDT / PGA 余额。
+
+步骤 9 将各 BSC 子钱包剩余 **BNB** 归集到 `COLLECT_ADDRESS`（未设置则用主钱包地址）。每笔发送 `余额 - gas`，gas 按 21000 预留；可归集金额低于 `--min-bnb`（默认 0.00001）时跳过。建议在步骤 7 收完 USDT 后再执行。
 
 | 模式 | 条件 | 行为 |
 |------|------|------|
@@ -206,7 +215,7 @@ npm run fist:11:collect-usdt -- --csv data/01-wallets-private.csv
 
 步骤 5 默认与 legacy `bridge.js` 相同：**发完桥接 tx 即继续**，不等待 BSC 到账。如需轮询 BSC 余额，手动加 `--check-bridge`（每钱包最多等 600s，BSC RPC 不通时自动跳过检查）。`.env` 中可设置 `BSC_RPC_URL`。
 
-步骤 6 的 `BNB_FEE_AMOUNT` 是留给各钱包付 gas 的，步骤 7 **只归集 USDT**，BNB 留在钱包里不动。USDT 归集约需 0.0002 BNB（3 gwei × 65000），建议 `BNB_FEE_AMOUNT=0.0002` 以上。步骤 7 会在转账前检测 BNB 是否够 gas，不足时 skip 并提示。
+步骤 6 的 `BNB_FEE_AMOUNT` 是留给各钱包付 gas 的，步骤 7 **只归集 USDT**，BNB 留在钱包里不动。USDT 归集约需 0.0002 BNB（3 gwei × 65000），建议 `BNB_FEE_AMOUNT=0.0002` 以上。步骤 7 会在转账前检测 BNB 是否够 gas，不足时 skip 并提示。收完 USDT 后可用步骤 9 把剩余 BNB 扫回主钱包。
 
 ### Dry-run
 
@@ -219,7 +228,7 @@ npm run 04:swap-btcd -- --csv data/01-wallets-private.csv --no-swap
 
 | 参数 | 说明 | 默认 |
 |------|------|------|
-| `--csv PATH` | 钱包 CSV 路径（步骤 2–7 必填） | — |
+| `--csv PATH` | 钱包 CSV 路径（步骤 2–9 必填） | — |
 | `--delay-min` / `--delay-max` | 钱包间随机延迟（秒） | 1 / 3 |
 | `--dry-run` | 模拟，不发交易 | — |
 | `--yes` | 跳过确认（npm 脚本已内置） | — |
