@@ -11,6 +11,7 @@
     "05:bridge-usdt": "node scripts/05-bridgeUSDTToBSC.js --yes",
     "06:transfer-bnb": "node scripts/06-transferBNBFee.js --yes",
     "07:collect-usdt": "node scripts/07-collectUSDT.js --yes",
+    "08:transfer-pg-usdt": "node scripts/08-transferPGChainUSDT.js --yes",
     "swap-legacy": "node scripts/legacy/swap.js --yes",
     "swap-legacy-dry-run": "node scripts/legacy/swap.js --dry-run --yes",
     "bridge-legacy": "node scripts/legacy/bridge.js --yes",

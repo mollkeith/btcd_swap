@@ -14,6 +14,7 @@ btcd-swap/
 │   ├── 05-bridgeUSDTToBSC.js
 │   ├── 06-transferBNBFee.js
 │   ├── 07-collectUSDT.js
+│   └── 08-transferPGChainUSDT.js
 │   └── legacy/
 ├── lib/
 ├── data/                  # 钱包 CSV（gitignore）
@@ -144,8 +145,9 @@ npm run 03:transfer-btcd -- --csv data/01-wallets.csv --min-btcd 1 --max-btcd 5 
 | 5 | `npm run 05:bridge-usdt -- --csv data/NN-wallets-private.csv` |
 | 6 | `npm run 06:transfer-bnb -- --csv data/NN-wallets.csv` |
 | 7 | `npm run 07:collect-usdt -- --csv data/NN-wallets-private.csv` |
+| 8 | `npm run 08:transfer-pg-usdt -- --csv data/NN-wallets.csv --min-usdt X --max-usdt Y` |
 
-步骤 3 会先读取主钱包 BTCD 余额及各地址链上 BTCD，**将全部 BTCD 分完**（主钱包零剩余），确认分配计划后再逐笔转账：
+步骤 8 从 `.env` 中 `WALLET_PRIVATE_KEY` 主钱包向 CSV 地址分发 **PGP USDT**：每个钱包在 `[min, max]` 内随机金额；`min === max` 时每人相同。转账前打印分配计划并校验 USDT / PGA 余额。
 
 | 模式 | 条件 | 行为 |
 |------|------|------|
