@@ -14,8 +14,17 @@ btcd-swap/
 │   ├── 05-bridgeUSDTToBSC.js
 │   ├── 06-transferBNBFee.js
 │   ├── 07-collectUSDT.js
+│   ├── fist/              # BTCD -> FIST -> Pancake USDT 流程
+│   │   ├── 01-createWallets.js
+│   │   ├── 04-approveBTCD.js
+│   │   ├── 05-swapBTCDToFIST.js
+│   │   ├── 06-approveFIST.js
+│   │   ├── 07-bridgeFISTToBSC.js
+│   │   ├── 09-approveFISTBSC.js
+│   │   └── 10-swapFISTToUSDT.js
 │   └── legacy/
 ├── lib/
+│   └── fist/              # FIST 流程共享库
 ├── data/                  # 钱包 CSV（gitignore）
 │   ├── 01-wallets.csv
 │   ├── 01-wallets-private.csv
@@ -132,6 +141,43 @@ npm run 04:swap-btcd -- --csv data/01-wallets-private.csv --no-swap
 # 任意步骤：模拟运行
 npm run 03:transfer-btcd -- --csv data/01-wallets.csv --min-btcd 1 --max-btcd 5 --dry-run
 ```
+
+### FIST 流程（BTCD → FIST → BSC → Pancake USDT）
+
+脚本在 `scripts/fist/`，npm 命令前缀 `fist:`。授权与 swap/bridge 分步执行：
+
+| 步骤 | 命令 | CSV |
+|------|------|-----|
+| 1 | `fist:01:create-wallets` | — |
+| 2 | `fist:02:transfer-pga` | public |
+| 3 | `fist:03:transfer-btcd` | public |
+| 4 | `fist:04:approve-btcd` | private |
+| 5 | `fist:05:swap-btcd-fist` | private |
+| 6 | `fist:06:approve-fist` | private |
+| 7 | `fist:07:bridge-fist` | private |
+| 8 | `fist:08:transfer-bnb` | public |
+| 9 | `fist:09:approve-fist-bsc` | private |
+| 10 | `fist:10:swap-fist-usdt` | private |
+| 11 | `fist:11:collect-usdt` | private |
+
+```bash
+npm run fist:01:create-wallets -- --count 5
+npm run fist:02:transfer-pga -- --csv data/01-wallets.csv
+npm run fist:03:transfer-btcd -- --csv data/01-wallets.csv --min-btcd 1 --max-btcd 100
+npm run fist:04:approve-btcd -- --csv data/01-wallets-private.csv
+npm run fist:05:swap-btcd-fist -- --csv data/01-wallets-private.csv
+npm run fist:06:approve-fist -- --csv data/01-wallets-private.csv
+npm run fist:07:bridge-fist -- --csv data/01-wallets-private.csv
+# 等待 BSC FIST 到账后
+npm run fist:08:transfer-bnb -- --csv data/01-wallets.csv
+npm run fist:09:approve-fist-bsc -- --csv data/01-wallets-private.csv
+npm run fist:10:swap-fist-usdt -- --csv data/01-wallets-private.csv
+npm run fist:11:collect-usdt -- --csv data/01-wallets-private.csv
+```
+
+合约：PG BTCD `0xF9BF…Cc6B` → PG FIST `0x800E…4B11`（PGARouterV2 `0x3F67…7bA8`）→ 跨链桥 → BSC FIST `0xc988…bc6a`（6 位小数）→ Pancake V2 USDT。
+
+步骤 4/6/9 仅 approve；若 allowance 已足够会自动 skip。步骤 5/7/10 会在需要时自动 approve。
 
 ### 命令一览
 
