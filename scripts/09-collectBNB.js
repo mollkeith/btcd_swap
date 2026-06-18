@@ -16,6 +16,7 @@ import { createLogger } from "../lib/logger.js";
 import { loadWalletsFromCsv, loadMasterWallet, getCollectAddress } from "../lib/wallet.js";
 import { randomDelay } from "../lib/random.js";
 import { requireCsvPath } from "../lib/walletCsv.js";
+import { planBnbSweep } from "../lib/bnbCollect.js";
 
 function printHelp() {
   console.log(`usage: node scripts/09-collectBNB.js [options]
@@ -50,8 +51,32 @@ function parseArgs(argv) {
   return args;
 }
 
-function collectibleBnb(bnbBal, gasCost) {
-  return bnbBal > gasCost ? bnbBal - gasCost : 0n;
+
+async function buildPlan(provider, job, collectAddress, gasPrice, gasLimitFloor, minCollectWei) {
+  const wallet = new Wallet(job.privateKey, provider);
+  const sweep = await planBnbSweep(provider, {
+    from: wallet.address,
+    to: collectAddress,
+    gasPrice,
+    gasLimitFloor,
+  });
+  const sendValue = sweep.sendValue;
+  return {
+    label: job.label,
+    address: wallet.address,
+    job,
+    bnb_before: sweep.balance,
+    send_value: sendValue,
+    gas_limit: Number(sweep.gasLimit),
+    gas_cost: sweep.gasCost,
+    status: sendValue >= minCollectWei ? "ready" : "skipped",
+    reason:
+      sendValue === 0n
+        ? `BNB insufficient for gas (have ${fmtAmount(sweep.balance)}, need ~${fmtAmount(sweep.gasCost)})`
+        : sendValue < minCollectWei
+          ? `collectible below min (${fmtAmount(sendValue)} < min)`
+          : null,
+  };
 }
 
 async function main() {
@@ -86,38 +111,27 @@ async function main() {
   catch (err) { console.error(`error: ${err.message}`); process.exit(1); }
 
   const gasPrice = parseUnits(String(args.gasPriceGwei), "gwei");
-  const gasCost = gasPrice * BigInt(args.gasLimit);
+  const gasLimitFloor = args.gasLimit;
   const minCollectWei = parseUnits(String(args.minBnb), 18);
 
+  const collectorCode = await provider.getCode(collectAddress);
+  const collectorIsContract = collectorCode !== "0x";
+
   console.log("Collect BNB on BSC");
-  console.log(`  collector:  ${collectAddress}`);
+  console.log(`  collector:  ${collectAddress}${collectorIsContract ? " (contract)" : ""}`);
   console.log(`  RPC:        ${bscRpcUrl}`);
   console.log(`  CSV:        ${csvPath}`);
   console.log(`  wallets:    ${jobs.length}`);
   console.log(`  gas price:  ${args.gasPriceGwei} gwei`);
-  console.log(`  gas/reserve: ~${fmtAmount(gasCost)} BNB per tx`);
+  if (collectorIsContract) {
+    console.log("  note:       collector is contract; gas estimated per wallet (may exceed 21000)");
+  }
   console.log(`  min collect: ${args.minBnb} BNB`);
   console.log(`  mode:       ${args.dryRun ? "DRY RUN" : "LIVE"}`);
 
   const plans = [];
   for (const job of jobs) {
-    const wallet = new Wallet(job.privateKey, provider);
-    const bnbBal = await provider.getBalance(wallet.address);
-    const sendValue = collectibleBnb(bnbBal, gasCost);
-    plans.push({
-      label: job.label,
-      address: wallet.address,
-      job,
-      bnb_before: bnbBal,
-      send_value: sendValue,
-      status: sendValue >= minCollectWei ? "ready" : "skipped",
-      reason:
-        sendValue === 0n
-          ? `BNB insufficient for gas (have ${fmtAmount(bnbBal)}, need ~${fmtAmount(gasCost)})`
-          : sendValue < minCollectWei
-            ? `collectible below min (${fmtAmount(sendValue)} < ${args.minBnb})`
-            : null,
-    });
+    plans.push(await buildPlan(provider, job, collectAddress, gasPrice, gasLimitFloor, minCollectWei));
   }
 
   const ready = plans.filter((p) => p.status === "ready");
@@ -126,7 +140,7 @@ async function main() {
     if (p.status === "ready") {
       console.log(
         `  ${p.label} (${p.address}) -> ${fmtAmount(p.send_value)} BNB ` +
-          `(balance ${fmtAmount(p.bnb_before)})`
+          `(balance ${fmtAmount(p.bnb_before)}, gas limit ${p.gas_limit})`
       );
     } else {
       console.log(`  ${p.label} (${p.address}): skip — ${p.reason}`);
@@ -171,20 +185,36 @@ async function main() {
     }
 
     try {
+      const sweep = await planBnbSweep(provider, {
+        from: plan.address,
+        to: collectAddress,
+        gasPrice,
+        gasLimitFloor,
+      });
+
+      if (sweep.sendValue < minCollectWei) {
+        result.reason = `collectible below min after re-check (${fmtAmount(sweep.sendValue)})`;
+        console.log(`  skipped: ${result.reason}`);
+        results.push(result);
+        logger.append(result);
+        continue;
+      }
+
       const hash = await sendLegacyTx(wallet, {
         to: collectAddress,
-        value: plan.send_value,
-        gasLimit: args.gasLimit,
+        value: sweep.sendValue,
+        gasLimit: Number(sweep.gasLimit),
         gasPrice,
         chainId: BSC.CHAIN_ID,
         type: 0,
       }, { dryRun: args.dryRun });
 
       result.status = "ok";
-      result.bnb_collected = fmtAmount(plan.send_value);
+      result.bnb_collected = fmtAmount(sweep.sendValue);
+      result.gas_limit = Number(sweep.gasLimit);
       result.bnb_tx = hash;
       result.bnb_after = fmtAmount(await provider.getBalance(wallet.address));
-      console.log(`  tx: ${hash} (${result.bnb_collected} BNB)`);
+      console.log(`  tx: ${hash} (${result.bnb_collected} BNB, gas ${result.gas_limit})`);
     } catch (err) {
       result.status = "failed";
       result.error = err.message;

@@ -105,6 +105,7 @@ async function main() {
   console.log(`  CSV:      ${csvPath}`);
   console.log(`  wallets:  ${jobs.length}`);
   console.log(`  slippage: ${slippagePct}% (${args.slippageBps} bps)`);
+  console.log(`  gas price: ${args.gasPriceGwei} gwei`);
   console.log(`  mode:     ${args.dryRun ? "DRY RUN" : "LIVE"}`);
 
   const previews = [];

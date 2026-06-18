@@ -3,6 +3,7 @@
 
 import { parseUnits } from "ethers";
 import { parseCommonFlags } from "../../lib/args.js";
+import { DEFAULT_GAS } from "../../lib/constants.js";
 import { approveFistForPancake } from "../../lib/fist/pancakeV2.js";
 import { runPrivateBatch } from "../../lib/fist/runPrivateBatch.js";
 import { FIST_BSC } from "../../lib/fist/constants.js";
@@ -17,7 +18,7 @@ function printHelp() {
 
 function parseArgs(argv) {
   const args = parseCommonFlags(argv, {
-    defaults: { amount: "all", minFist: 1, gasPriceGwei: 3 },
+    defaults: { amount: "all", minFist: 1, gasPriceGwei: DEFAULT_GAS.bscGwei },
     onUnknown(arg, argv, i, a) {
       if (arg === "--amount") { a.amount = argv[i + 1]; return i + 1; }
       if (arg === "--min-fist") { a.minFist = Number(argv[i + 1]); return i + 1; }

@@ -15,6 +15,7 @@ import { createLogger } from "../lib/logger.js";
 import { loadWalletsFromCsv, loadMasterWallet, getCollectAddress } from "../lib/wallet.js";
 import { randomDelay } from "../lib/random.js";
 import { requireCsvPath } from "../lib/walletCsv.js";
+import { planBnbSweep } from "../lib/bnbCollect.js";
 
 function printHelp() {
   console.log(`usage: node collectUSDT.js [options]
@@ -103,12 +104,14 @@ let csvPath;
   const minUsdtWei = parseUnits(String(args.minUsdt), 18);
   const gasPrice = parseUnits(String(args.gasPriceGwei), "gwei");
   const gasLimitTransfer = DEFAULT_GAS.gasLimitTransfer;
-  const gasLimitBnb = DEFAULT_GAS.gasLimitBnbTransfer;
+  const collectorCode = await provider.getCode(collectAddress);
+  const collectorIsContract = collectorCode !== "0x";
+  const gasLimitBnbFloor = collectorIsContract ? 23_000 : DEFAULT_GAS.gasLimitBnbTransfer;
   const usdtGasCost = gasCost(gasPrice, gasLimitTransfer);
-  const bnbGasCost = gasCost(gasPrice, gasLimitBnb);
+  const bnbGasCost = gasCost(gasPrice, gasLimitBnbFloor);
 
   console.log("Collect USDT on BSC");
-  console.log(`  collector: ${collectAddress}`);
+  console.log(`  collector: ${collectAddress}${collectorIsContract ? " (contract)" : ""}`);
   console.log(`  CSV:       ${csvPath}`);
   console.log(`  wallets:   ${jobs.length}`);
   console.log(`  collect BNB: ${args.collectBnb}`);
@@ -152,7 +155,7 @@ let csvPath;
       const bnbNeed = requiredBnbWei({
         gasPrice,
         gasLimitTransfer,
-        gasLimitBnb,
+        gasLimitBnb: gasLimitBnbFloor,
         collectUsdt: willCollectUsdt,
         collectBnb: args.collectBnb,
       });
@@ -179,27 +182,31 @@ let csvPath;
       }
 
       if (args.collectBnb) {
-        const bnbBalAfter = await provider.getBalance(wallet.address);
-        const sendValue = bnbBalAfter > bnbGasCost ? bnbBalAfter - bnbGasCost : 0n;
-        result.bnb_after_usdt = fmtAmount(bnbBalAfter);
+        const sweep = await planBnbSweep(provider, {
+          from: wallet.address,
+          to: collectAddress,
+          gasPrice,
+          gasLimitFloor: gasLimitBnbFloor,
+        });
+        result.bnb_after_usdt = fmtAmount(sweep.balance);
 
-        if (sendValue > 0n) {
+        if (sweep.sendValue > 0n) {
           const bnbHash = await sendLegacyTx(wallet, {
             to: collectAddress,
-            value: sendValue,
-            gasLimit: gasLimitBnb,
+            value: sweep.sendValue,
+            gasLimit: Number(sweep.gasLimit),
             gasPrice,
             chainId: BSC.CHAIN_ID,
             type: 0,
           }, { dryRun: args.dryRun });
-          result.bnb_collected = fmtAmount(sendValue);
+          result.bnb_collected = fmtAmount(sweep.sendValue);
           result.bnb_tx = bnbHash;
           if (result.status === "skipped") {
             result.status = "ok";
           }
           console.log(`  BNB tx: ${bnbHash} (${result.bnb_collected} BNB)`);
-        } else if (bnbBalAfter > 0n && bnbBalAfter < bnbGasCost) {
-          result.bnb_skipped = bnbShortfallMessage(bnbBalAfter, bnbGasCost, args.gasPriceGwei);
+        } else if (sweep.balance > 0n && sweep.balance < sweep.gasCost) {
+          result.bnb_skipped = bnbShortfallMessage(sweep.balance, sweep.gasCost, args.gasPriceGwei);
           console.log(`  BNB skipped: ${result.bnb_skipped}`);
         } else {
           result.bnb_skipped = "no BNB to collect";
